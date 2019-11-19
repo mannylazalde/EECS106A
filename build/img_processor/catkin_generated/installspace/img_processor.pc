@@ -1,0 +1,8 @@
+prefix=/home/cc/ee106a/fa19/class/ee106a-abe/ros_workspaces/project/install
+
+Name: img_processor
+Description: Description of img_processor
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/cc/ee106a/fa19/class/ee106a-abe/ros_workspaces/project/install/lib 
+Requires: 
