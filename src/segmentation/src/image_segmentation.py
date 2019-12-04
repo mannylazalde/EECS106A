@@ -115,7 +115,15 @@ def threshold_segment_naive(gray_img, lower_thresh, upper_thresh):
     # Boolean array indexing, or masking will come in handy. 
     # See https://docs.scipy.org/doc/numpy-1.13.0/user/basics.indexing.html
 
-    raise NotImplementedError()
+    img_copy = gray_img.copy()
+    img_copy[img_copy<lower_thresh] = 1
+    img_copy[img_copy>upper_thresh] = 1
+    img_copy[img_copy != 1] = 0
+  
+
+    return img_copy
+
+    # raise NotImplementedError()
 
 
 def edge_detect_naive(gray_img):
@@ -141,12 +149,23 @@ def edge_detect_naive(gray_img):
 
     # Steps
     # 1. apply a gaussian blur with a 5x5 kernel.
-    # 2. define the convolution kernel Kx and Ky as defined in the doc.
-    # 3. compute Gx and Gy by convolving Kx and Ky respectively with the blurred image.
-    # 4. compute G = sqrt(Gx ** 2 + Gy ** 2)
-    # 5. Return G
+    g_blur = cv2.GaussianBlur(gray_s, (5,5), 0)
 
-    raise NotImplementedError()
+    # 2. define the convolution kernel Kx and Ky as defined in the doc.
+    Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    Ky = np.array([[-1, -2, -1], [0 , 0, 0], [1, 2, 1]])
+
+    # 3. compute Gx and Gy by convolving Kx and Ky respectively with the blurred image.
+    Gx = ndimage.convolve(g_blur, Kx)
+    Gy = ndimage.convolve(g_blur, Ky)
+
+    # 4. compute G = sqrt(Gx ** 2 + Gy ** 2)
+    G = (Gx ** 2 + Gy ** 2) ** 0.5
+
+    # 5. Return G
+    return G
+
+    # raise NotImplementedError()
 
 def edge_detect_canny(gray_img):
     """perform Canny edge detection
@@ -184,7 +203,7 @@ def cluster_segment(img, n_clusters, random_state=0):
         clusters of gray_img represented with similar pixel values
     """
     # Remove this line when you implement this function.
-    raise NotImplementedError()
+    # raise NotImplementedError()
 
     # Downsample img first using the mean to speed up K-means
     img_d = block_reduce(img, block_size=(2, 2, 1), func=np.mean)
@@ -193,19 +212,19 @@ def cluster_segment(img, n_clusters, random_state=0):
 
     # first convert our 3-dimensional img_d array to a 2-dimensional array
     # whose shape will be (length * width, number of channels) hint: use img_d.shape
-    img_r = TODO
+    img_r = np.reshape(img_d, (np.shape(img_d)[0]*np.shape(img_d)[1], 3))
     
     # fit the k-means algorithm on this reshaped array img_r using the
     # the scikit-learn k-means class and fit function
     # see https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
     # the only parameters you have to worry about are n_clusters and random_state
-    kmeans = TODO
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(img_r)
 
     # get the labeled cluster image using kmeans.labels_
-    clusters = TODO
+    clusters = kmeans.labels_
 
     # reshape this clustered image to the original downsampled image (img_d) shape
-    cluster_img = TODO
+    cluster_img = np.reshape(clusters, np.shape(img_d)[0:2])
 
     # Upsample the image back to the original image (img) using nearest interpolation
     img_u = imresize(cluster_img, (img.shape[0], img.shape[1]), interp='nearest')
@@ -216,16 +235,9 @@ def to_grayscale(rgb_img):
     return np.dot(rgb_img[... , :3] , [0.299 , 0.587, 0.114])
 
 def segment_image(img): 
-    # ONLY USE ONE THRESHOLDING METHOD
+    binary = threshold_segment_naive(to_grayscale(img), 80, 220).astype(np.uint8)
+    #binary = cluster_segment(img, 2).astype(np.uint8) / 255
 
-    # perform thresholding segmentation
-    binary = threshold_segment_naive(to_grayscale(img), TODO, TODO).astype(np.uint8)
-
-    # perform clustering segmentation (make image binary)
-    # binary = cluster_segment(img, 2).astype(np.uint8) / 255
-
-    # if np.mean(binary) > 0.5:
-    #     binary = 1 - binary #invert the pixels if K-Means assigned 1's to background, and 0's to foreground
 
     return binary
 
@@ -264,7 +276,7 @@ if __name__ == '__main__':
     # uncomment the test you want to run
     # it will plot the image and also save it
 
-    test_thresh_naive(test_img, TODO, TODO)
+    # test_thresh_naive(test_img, 100, 200)
     # test_edge_naive(test_img)
     # test_edge_canny(test_img)
-    # test_cluster(test_img_color, 2)
+    test_cluster(test_img_color, 8)
