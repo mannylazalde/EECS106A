@@ -71,7 +71,7 @@ class Tracker:
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-            if radius > 1:
+            if radius > 15:
                 # Draw a circle outlining the object (image, center, radius, color, thickness)
                 cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                 # Draw a circle tracking the centroid of the object
