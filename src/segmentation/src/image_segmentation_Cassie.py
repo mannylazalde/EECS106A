@@ -59,6 +59,7 @@ class Tracker:
         contours, hierarchy= cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Initialize the centroid of the object
         center = None
+        radius = 0
 
         if len(contours) > 0:
             # Find the contour with the greatest contour area
@@ -66,8 +67,9 @@ class Tracker:
             # Find a circle of the minimum area enclosing the contour points
             # Outputs (x,y) center coordinates and radius of circle
             ((x, y), radius) = cv2.minEnclosingCircle(c)
+            print(radius)
             # Get dictionary of all moment values calculated
-            M = cv2.moments(c) 
+            M = cv2.moments(c)
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
@@ -86,37 +88,49 @@ class Tracker:
         else:
             self.xoffset = -1
             self.yoffset = -1
-        return self.xoffset, self.yoffset, frame
+        return self.xoffset, self.yoffset, frame, radius
+
+
+def parabolic(radius):
+    a0 = 2.59936585e+01
+    a1 = -3.72791626e-01
+    a2 = 1.32533945e-03
+    return a2*radius*radius + a1*radius + a0
+
+def get_height(radius):
+    return parabolic(radius)
+
 
 # Converts a ROS Image message to a NumPy array to be displayed by OpenCV
 def ros_to_cv2_img(ros_img_msg):
 	return np.array(bridge.imgmsg_to_cv2(ros_img_msg,'bgr8'))
 
 
-### ROS subscriber nonsense 
+### ROS subscriber nonsense
 def callback(message):
 
 	#converts from ROS format to cv2 format
     image = ros_to_cv2_img(message)
 
-    
+
     #cv2.imwrite("7.jpeg", image)
-    print(cv2.__version__)
+    #print(cv2.__version__)
 
     #EDIT THIS TO LOAD IMAGE IN TRACK
-    X, Y, img1 = ball_tracker.track(image)
+    X, Y, img1, radius = ball_tracker.track(image)
+    #
+    Z = get_height(radius)
+    #
+    camera_pub.publish(Vector3(X,Y,Z))
 
     # print("image save")
     cv2.imshow("Image window", img1)
-    cv2.waitKey(0)
+    cv2.waitKey(1)
 
 
     #X,Y,Z should be changed based on image processing
-    X = 0
-    Y = 0
-    Z = 0
 
-    camera_pub.publish(Vector3(X,Y,Z))
+
 
 
 #Define the method which contains the node's main functionality
@@ -129,7 +143,7 @@ def listener():
     #name, which ROS doesn't allow.
     rospy.init_node('Image_Processor', anonymous=True)
 
-    #Create a new instance of the rospy.Subscriber object which we can 
+    #Create a new instance of the rospy.Subscriber object which we can
     #use to receive messages of type std_msgs/String from the topic /chatter_talk.
     #Whenever a new message is received, the method callback() will be called
     #with the received message as its first argument.
@@ -138,7 +152,7 @@ def listener():
     #/camera/color/image_raw - Should be something along this line
 
     ############################### Might have to change on Cassie##################
-    rospy.Subscriber("/device_0/sensor_1/Color_0/image/data", msg_image, callback)
+    rospy.Subscriber("/camera/color/image_raw", msg_image, callback)
 
     #Wait for messages to arrive on the subscribed topics, and exit the node
     #when it is killed with Ctrl+C
@@ -147,10 +161,20 @@ def listener():
 
 if __name__ == '__main__':
 
+    fps = 30
+    z0 = 103.1875 #[mm]
+    r0 = 153.6826171875
+
+    r1 = (60.24595642089844 + 61.16786193847656)/2
+    z1 = z0 + 203.2 #[mm]
+
+    r2 = 38.5520133972168
+    z2 = z0 + 381 #[mm]
+
     # Initialize lower and upper HSV threshold values for ping pong ball
     H_scale = 255/360.0 #H values span from 0-360
     S_V_scale = 255/100.0 #S and V values span from 0-100
-    
+
     #CHANGE THESE HSV VALUES
     H_low = 0
     S_low = 16
@@ -166,7 +190,7 @@ if __name__ == '__main__':
     # Create a ball tracker
     ball_tracker = Tracker(1280, 720, ball_lower, ball_upper)
 
-  
-    # Start the subscriber node. Everything happens in callback of node, since 
+
+    # Start the subscriber node. Everything happens in callback of node, since
     # callback called everytime new information is available on the publisher
     listener()
