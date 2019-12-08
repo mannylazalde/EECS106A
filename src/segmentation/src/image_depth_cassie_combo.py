@@ -246,17 +246,19 @@ def main():
         color_image = ball_tracker.draw_arrows(color_image)
         #Take depth at the centroid and above/below/left/right at a distance of radius/3
         Depth = rs.depth_frame.get_distance(aligned_depth_frame, X, Y)
-        Depth_a = rs.depth_frame.get_distance(aligned_depth_frame, X, Y+radius/3)
-        Depth_b = rs.depth_frame.get_distance(aligned_depth_frame, X, Y-radius/3)
-        Depth_l = rs.depth_frame.get_distance(aligned_depth_frame, X-radius/3, Y)
-        Depth_r = rs.depth_frame.get_distance(aligned_depth_frame, X+radius/3, Y)
+        Depth_a = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y+radius/3))
+        Depth_b = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y-radius/3))
+        Depth_l = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X-radius/3), Y)
+        Depth_r = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X+radius/3), Y)
         X, Y, Z = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y], Depth)
-        X_a, Y_a, Z_a = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y+radius/3], Depth_a)
-        X_b, Y_b, Z_b = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y-radius/3], Depth_b)
-        X_l, Y_l, Z_l = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X-radius/3, Y], Depth_l)
-        X_r, Y_r, Z_r = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X+radius/3, Y], Depth_r)
-        Z_values = [Z Z_a Z_b Z_l Z_r]
+        X_a, Y_a, Z_a = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y+radius/3)], Depth_a)
+        X_b, Y_b, Z_b = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y-radius/3)], Depth_b)
+        X_l, Y_l, Z_l = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X-radius/3), Y], Depth_l)
+        X_r, Y_r, Z_r = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X+radius/3), Y], Depth_r)
+        Z_values = [Z, Z_a, Z_b, Z_l, Z_r]
+        print(Z_values)
         #Calculate average Z value out of all 5 data points (excluding those that are 0)
+        print(Z_values[Z_values!=0])
         Z_avg = np.mean(Z_values[Z_values!=0])
         #publish the x,y,z
         camera_pub.publish(Vector3(X,Y,Z_avg))
