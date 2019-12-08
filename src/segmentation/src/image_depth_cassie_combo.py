@@ -84,7 +84,7 @@ class Tracker:
         else:
             self.xoffset = -1
             self.yoffset = -1
-        return self.xoffset, self.yoffset, frame
+        return self.xoffset, self.yoffset, frame, radius
 
 
 def parabolic(radius):
@@ -230,19 +230,23 @@ def main():
         depth_intrinsics = rs.video_stream_profile(
         aligned_frames.profile).get_intrinsics()
 
-
-        X, Y,img1= ball_tracker.track(color_image)
+        #use track method to find radius 
+        X, Y,img1,radius = ball_tracker.track(color_image)
+        Z_rgb = get_height(radius)
         color_image = ball_tracker.draw_arrows(color_image)
         Depth = rs.depth_frame.get_distance(aligned_depth_frame, X, Y)
         X, Y, Z = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y], Depth)
+        #publish the x,y,z
         camera_pub.publish(Vector3(X,Y,Z))
 
-        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
-        images = np.hstack((color_image, depth_colormap))
+
+       # depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        #images = np.hstack((color_image, depth_colormap))
         font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(images, 'Y: %.4f, X: %.4f Depth: %.4f'%(Y, X, Z), (10,450), font, 0.8, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(img1, 'Y: %.4f, X: %.4f Depth Sensor: %.4f RGB Depth: %.4f'%(Y, X, Z, Z_rgb), (10,450), font, 0.8, (0, 255, 0), 2, cv2.LINE_AA)
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-        cv2.imshow('RealSense', images)
+        #cv2.imshow('RealSense', images)
+        cv2.imshow('RealSense', img1)
 
         key = cv2.waitKey(30)
         if key == ord('q') or key == 27:
