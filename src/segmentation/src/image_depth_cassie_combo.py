@@ -12,6 +12,7 @@ import rospy
 from sensor_msgs.msg import Image as msg_image
 from geometry_msgs.msg import Vector3
 import message_filters
+import pyrealsense2 as rs
 
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -24,7 +25,7 @@ import cv2
 
 
  # Create a CvBridge to convert ROS messages to OpenCV images
-#bridge = CvBridge()
+bridge = CvBridge()
 
 
 class Tracker:
@@ -57,6 +58,7 @@ class Tracker:
         contours, hierarchy= cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Initialize the centroid of the object
         center = None
+        radius = 0
 
         if len(contours) > 0:
             # Find the contour with the greatest contour area
@@ -65,7 +67,7 @@ class Tracker:
             # Outputs (x,y) center coordinates and radius of circle
             ((x, y), radius) = cv2.minEnclosingCircle(c)
             # Get dictionary of all moment values calculated
-            M = cv2.moments(c) 
+            M = cv2.moments(c)
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
@@ -102,13 +104,13 @@ def ros_to_cv2_img(ros_img_msg):
 	return np.array(bridge.imgmsg_to_cv2(ros_img_msg,'bgr8'))
 
 
-### ROS subscriber nonsense 
+### ROS subscriber nonsense
 def callback(message):
 
 	#converts from ROS format to cv2 format
     image = ros_to_cv2_img(message)
 
-    
+
     #cv2.imwrite("7.jpeg", image)
     print(cv2.__version__)
 
@@ -126,7 +128,7 @@ def callback(message):
 
     #X,Y,Z should be changed based on image processing
 
-    
+
 
 
 #Define the method which contains the node's main functionality
@@ -139,7 +141,7 @@ def listener():
     #name, which ROS doesn't allow.
     rospy.init_node('Image_Processor', anonymous=True)
 
-    #Create a new instance of the rospy.Subscriber object which we can 
+    #Create a new instance of the rospy.Subscriber object which we can
     #use to receive messages of type std_msgs/String from the topic /chatter_talk.
     #Whenever a new message is received, the method callback() will be called
     #with the received message as its first argument.
@@ -168,7 +170,7 @@ def main():
     # Initialize lower and upper HSV threshold values for ping pong ball
     H_scale = 255/360.0 #H values span from 0-360
     S_V_scale = 255/100.0 #S and V values span from 0-100
-    
+
     #CHANGE THESE HSV VALUES
     H_low = 0
     S_low = 16
@@ -181,14 +183,12 @@ def main():
     ball_lower = (int(H_low*H_scale), int(S_low*S_V_scale), int(V_low*S_V_scale))
     ball_upper = (int(H_high*H_scale), int(S_high*S_V_scale), int(V_high*S_V_scale))
 
-    # Create a ball tracker
-    ball_tracker = Tracker(1280, 720, ball_lower, ball_upper)
 
     # Configure the depth and colour streams
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
 
     # Start streaming
     profile = pipeline.start(config)
@@ -205,6 +205,9 @@ def main():
     align_to = rs.stream.color
     align = rs.align(align_to)
 
+    # Create a ball tracker
+    ball_tracker = Tracker(640, 480, ball_lower, ball_upper)
+
     # Create a camera node
     rospy.init_node('ball_tracker', anonymous=True)
     camera_pub = rospy.Publisher('ball_position', Vector3, queue_size=10)
@@ -213,6 +216,9 @@ def main():
     loop_rate = 600
     dt = 1/loop_rate
     rate = rospy.Rate(loop_rate)
+
+    for i in range(0,50):
+        frames = pipeline.wait_for_frames()
 
     while not rospy.is_shutdown():
         frames = pipeline.wait_for_frames()
@@ -230,14 +236,19 @@ def main():
         depth_intrinsics = rs.video_stream_profile(
         aligned_frames.profile).get_intrinsics()
 
-        #use track method to find radius 
+        #use track method to find radius
         X, Y,img1,radius = ball_tracker.track(color_image)
+        #cv2.imshow('RealSense', images)
+        cv2.imshow('RealSense', img1)
+        cv2.waitKey(0)
+
         Z_rgb = get_height(radius)
         color_image = ball_tracker.draw_arrows(color_image)
         Depth = rs.depth_frame.get_distance(aligned_depth_frame, X, Y)
         X, Y, Z = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y], Depth)
         #publish the x,y,z
         camera_pub.publish(Vector3(X,Y,Z))
+        print("depth_sensor: " +str(Z) + "; Other Z:" + str(.0254*Z_rgb))
 
 
        # depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
@@ -245,8 +256,7 @@ def main():
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(img1, 'Y: %.4f, X: %.4f Depth Sensor: %.4f RGB Depth: %.4f'%(Y, X, Z, Z_rgb), (10,450), font, 0.8, (0, 255, 0), 2, cv2.LINE_AA)
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-        #cv2.imshow('RealSense', images)
-        cv2.imshow('RealSense', img1)
+
 
         key = cv2.waitKey(30)
         if key == ord('q') or key == 27:
@@ -258,6 +268,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-   
-
