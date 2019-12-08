@@ -13,6 +13,7 @@ from sensor_msgs.msg import Image as msg_image
 from geometry_msgs.msg import Vector3
 import message_filters
 import pyrealsense2 as rs
+from statistics import mean
 
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -255,7 +256,7 @@ def main():
         X_b, Y_b, Z_b = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y-radius/3)], Depth_b)
         X_l, Y_l, Z_l = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X-radius/3), Y], Depth_l)
         X_r, Y_r, Z_r = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X+radius/3), Y], Depth_r)
-        Z_values = [Z, Z_a, Z_b, Z_l, Z_r]
+        Z_values = np.array([Z, Z_a, Z_b, Z_l, Z_r])
         print(Z_values)
         #Calculate average Z value out of all 5 data points (excluding those that are 0)
         print(Z_values[Z_values!=0])
