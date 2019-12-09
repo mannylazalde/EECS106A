@@ -56,7 +56,7 @@ class Tracker:
         #cv2.imshow('mask', mask)
         # Find contours in image (image, contour retrieval mode, contour approximation method)
         # Contours stored as vectors of points, hierarchy is unused
-        contours, hierarchy= cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        new_img, contours, hierarchy= cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Initialize the centroid of the object
         center = None
         radius = 0
@@ -67,13 +67,12 @@ class Tracker:
             # Find a circle of the minimum area enclosing the contour points
             # Outputs (x,y) center coordinates and radius of circle
             ((x, y), radius) = cv2.minEnclosingCircle(c)
-            print(radius)
             # Get dictionary of all moment values calculated
-            M = cv2.moments(c)
+            M = cv2.moments(c) 
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-            if radius > 15:
+            if radius > 5:
                 # Draw a circle outlining the object (image, center, radius, color, thickness)
                 cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                 # Draw a circle tracking the centroid of the object
@@ -92,9 +91,12 @@ class Tracker:
 
 
 def parabolic(radius):
-    a0 = 2.59936585e+01
+    '''a0 = 2.59936585e+01
     a1 = -3.72791626e-01
-    a2 = 1.32533945e-03
+    a2 = 1.32533945e-03'''
+    a0 = 2.56283288e+01 
+    a1 = -1.12146900e+00  
+    a2 = 1.25567948e-02
     return a2*radius*radius + a1*radius + a0
 
 def get_height(radius):
@@ -106,31 +108,33 @@ def ros_to_cv2_img(ros_img_msg):
 	return np.array(bridge.imgmsg_to_cv2(ros_img_msg,'bgr8'))
 
 
-### ROS subscriber nonsense
+### ROS subscriber nonsense 
 def callback(message):
 
 	#converts from ROS format to cv2 format
     image = ros_to_cv2_img(message)
 
-
+    
     #cv2.imwrite("7.jpeg", image)
     #print(cv2.__version__)
 
     #EDIT THIS TO LOAD IMAGE IN TRACK
     X, Y, img1, radius = ball_tracker.track(image)
-    #
+
     Z = get_height(radius)
-    #
+    print(radius, Z)
+    
     camera_pub.publish(Vector3(X,Y,Z))
 
     # print("image save")
     cv2.imshow("Image window", img1)
     cv2.waitKey(1)
+    #cv2.imwrite("")
 
 
     #X,Y,Z should be changed based on image processing
 
-
+    
 
 
 #Define the method which contains the node's main functionality
@@ -143,7 +147,7 @@ def listener():
     #name, which ROS doesn't allow.
     rospy.init_node('Image_Processor', anonymous=True)
 
-    #Create a new instance of the rospy.Subscriber object which we can
+    #Create a new instance of the rospy.Subscriber object which we can 
     #use to receive messages of type std_msgs/String from the topic /chatter_talk.
     #Whenever a new message is received, the method callback() will be called
     #with the received message as its first argument.
@@ -152,7 +156,9 @@ def listener():
     #/camera/color/image_raw - Should be something along this line
 
     ############################### Might have to change on Cassie##################
+    #rospy.Subscriber("/device_0/sensor_1/Color_0/image/data", msg_image, callback)
     rospy.Subscriber("/camera/color/image_raw", msg_image, callback)
+
 
     #Wait for messages to arrive on the subscribed topics, and exit the node
     #when it is killed with Ctrl+C
@@ -160,6 +166,7 @@ def listener():
 
 
 if __name__ == '__main__':
+
 
     fps = 30
     z0 = 103.1875 #[mm]
@@ -174,7 +181,7 @@ if __name__ == '__main__':
     # Initialize lower and upper HSV threshold values for ping pong ball
     H_scale = 255/360.0 #H values span from 0-360
     S_V_scale = 255/100.0 #S and V values span from 0-100
-
+    
     #CHANGE THESE HSV VALUES
     H_low = 0
     S_low = 16
@@ -190,7 +197,8 @@ if __name__ == '__main__':
     # Create a ball tracker
     ball_tracker = Tracker(1280, 720, ball_lower, ball_upper)
 
-
-    # Start the subscriber node. Everything happens in callback of node, since
+  
+    # Start the subscriber node. Everything happens in callback of node, since 
     # callback called everytime new information is available on the publisher
     listener()
+
