@@ -6,6 +6,7 @@
 
 import os
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 import time
 import rospy
@@ -13,7 +14,6 @@ from sensor_msgs.msg import Image as msg_image
 from geometry_msgs.msg import Vector3
 import message_filters
 import pyrealsense2 as rs
-from statistics import mean
 
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -56,7 +56,7 @@ class Tracker:
         #cv2.imshow('mask', mask)
         # Find contours in image (image, contour retrieval mode, contour approximation method)
         # Contours stored as vectors of points, hierarchy is unused
-        contours, hierarchy= cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        new_img, contours, hierarchy= cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Initialize the centroid of the object
         center = None
         radius = 0
@@ -72,7 +72,7 @@ class Tracker:
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-            if radius > 15:
+            if radius > 5:
                 # Draw a circle outlining the object (image, center, radius, color, thickness)
                 cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                 # Draw a circle tracking the centroid of the object
@@ -113,7 +113,7 @@ def callback(message):
 
 
     #cv2.imwrite("7.jpeg", image)
-    print(cv2.__version__)
+    #print(cv2.__version__)
 
     #EDIT THIS TO LOAD IMAGE IN TRACK
     X, Y, img1, radius = ball_tracker.track(image)
@@ -123,8 +123,8 @@ def callback(message):
     camera_pub.publish(Vector3(X,Y,Z))
 
     # print("image save")
-    cv2.imshow("Image window", img1)
-    cv2.waitKey(1)
+    #cv2.imshow("Image window", img1)
+    #cv2.waitKey(1)
 
 
     #X,Y,Z should be changed based on image processing
@@ -189,7 +189,7 @@ def main():
     pipeline = rs.pipeline()
     config = rs.config()
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 
     # Start streaming
     profile = pipeline.start(config)
@@ -241,29 +241,35 @@ def main():
         X, Y,img1,radius = ball_tracker.track(color_image)
         #cv2.imshow('RealSense', images)
         cv2.imshow('RealSense', img1)
-        cv2.waitKey(0)
+        cv2.waitKey(1)
 
-        Z_rgb = get_height(radius)
+        Z_rgb = get_height(radius)*.0254
         color_image = ball_tracker.draw_arrows(color_image)
         #Take depth at the centroid and above/below/left/right at a distance of radius/3
         Depth = rs.depth_frame.get_distance(aligned_depth_frame, X, Y)
-        Depth_a = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y+radius/3))
-        Depth_b = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y-radius/3))
-        Depth_l = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X-radius/3), Y)
-        Depth_r = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X+radius/3), Y)
+        Depth_a = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y+radius/5))
+        Depth_b = rs.depth_frame.get_distance(aligned_depth_frame, X, np.uint8(Y-radius/5))
+        Depth_l = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X-radius/5), Y)
+        Depth_r = rs.depth_frame.get_distance(aligned_depth_frame, np.uint8(X+radius/5), Y)
         X, Y, Z = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, Y], Depth)
-        X_a, Y_a, Z_a = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y+radius/3)], Depth_a)
-        X_b, Y_b, Z_b = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y-radius/3)], Depth_b)
-        X_l, Y_l, Z_l = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X-radius/3), Y], Depth_l)
-        X_r, Y_r, Z_r = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X+radius/3), Y], Depth_r)
+        X_a, Y_a, Z_a = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y+radius/5)], Depth_a)
+        X_b, Y_b, Z_b = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [X, np.uint8(Y-radius/5)], Depth_b)
+        X_l, Y_l, Z_l = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X-radius/5), Y], Depth_l)
+        X_r, Y_r, Z_r = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [np.uint8(X+radius/5), Y], Depth_r)
         Z_values = np.array([Z, Z_a, Z_b, Z_l, Z_r])
-        print(Z_values)
-        #Calculate average Z value out of all 5 data points (excluding those that are 0)
-        print(Z_values[Z_values!=0])
-        Z_avg = np.mean(Z_values[Z_values!=0])
+        #Calculate min Z value out of all 5 data points (excluding those that are 0 and nan)
+        Z_avg = Z_values[Z_values!=0]
         #publish the x,y,z
-        camera_pub.publish(Vector3(X,Y,Z_avg))
-        print("depth_sensor: " +str(Z_avg) + "; Other Z:" + str(.0254*Z_rgb))
+        if len(Z_avg) > 0:
+            Z_avg = np.nanmin(Z_avg)
+            print(Z_avg)
+            camera_pub.publish(Vector3(X,Y,Z_avg))
+        else:
+            print(Z_rgb)
+            camera_pub.publish(Vector3(X,Y,Z_rgb))
+
+       
+        #print("depth_sensor: " +str(Z_avg) + "; Other Z:" + str(.0254*Z_rgb))
 
 
        # depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
