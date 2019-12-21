@@ -56,9 +56,10 @@ class Tracker:
         #cv2.imshow('mask', mask)
         # Find contours in image (image, contour retrieval mode, contour approximation method)
         # Contours stored as vectors of points, hierarchy is unused
-        contours, hierarchy= cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        new_img, contours, hierarchy= cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # Initialize the centroid of the object
         center = None
+        radius = 0
 
         if len(contours) > 0:
             # Find the contour with the greatest contour area
@@ -71,7 +72,7 @@ class Tracker:
             # Calculate the centroid of the object
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-            if radius > 15:
+            if radius > 5:
                 # Draw a circle outlining the object (image, center, radius, color, thickness)
                 cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                 # Draw a circle tracking the centroid of the object
@@ -90,9 +91,12 @@ class Tracker:
 
 
 def parabolic(radius):
-    a0 = 2.59936585e+01
+    '''a0 = 2.59936585e+01
     a1 = -3.72791626e-01
-    a2 = 1.32533945e-03
+    a2 = 1.32533945e-03'''
+    a0 = 2.56283288e+01 
+    a1 = -1.12146900e+00  
+    a2 = 1.25567948e-02
     return a2*radius*radius + a1*radius + a0
 
 def get_height(radius):
@@ -112,18 +116,20 @@ def callback(message):
 
     
     #cv2.imwrite("7.jpeg", image)
-    print(cv2.__version__)
+    #print(cv2.__version__)
 
     #EDIT THIS TO LOAD IMAGE IN TRACK
     X, Y, img1, radius = ball_tracker.track(image)
 
     Z = get_height(radius)
+    print(radius, Z)
     
     camera_pub.publish(Vector3(X,Y,Z))
 
     # print("image save")
     cv2.imshow("Image window", img1)
-    cv2.waitKey(0)
+    cv2.waitKey(1)
+    #cv2.imwrite("")
 
 
     #X,Y,Z should be changed based on image processing
@@ -150,7 +156,9 @@ def listener():
     #/camera/color/image_raw - Should be something along this line
 
     ############################### Might have to change on Cassie##################
-    rospy.Subscriber("/device_0/sensor_1/Color_0/image/data", msg_image, callback)
+    #rospy.Subscriber("/device_0/sensor_1/Color_0/image/data", msg_image, callback)
+    rospy.Subscriber("/camera/color/image_raw", msg_image, callback)
+
 
     #Wait for messages to arrive on the subscribed topics, and exit the node
     #when it is killed with Ctrl+C
